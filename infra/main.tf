@@ -1,14 +1,20 @@
 data "aws_availability_zones" "available" {
   state = "available"
+
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
 }
 
 locals {
   name = "${var.project}-${var.env}"
-  azs  = slice(data.aws_availability_zones.available.names, 0, 2)
+
+  # Force standard AZs only
+  azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
   vpc_cidr = "10.0.0.0/16"
 
-  # /24 subnets derived from the /16 VPC
   public_subnet_cidrs  = [cidrsubnet(local.vpc_cidr, 8, 0), cidrsubnet(local.vpc_cidr, 8, 1)]
   private_subnet_cidrs = [cidrsubnet(local.vpc_cidr, 8, 10), cidrsubnet(local.vpc_cidr, 8, 11)]
 }
