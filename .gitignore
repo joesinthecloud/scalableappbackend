@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Terraform
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/crash.log
+infra/crash.*.log
+
+# Evidence outputs
+evidence/*
+!evidence/.gitkeep
+
+# OS
+.DS_Store
