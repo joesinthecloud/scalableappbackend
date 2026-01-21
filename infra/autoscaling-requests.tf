@@ -6,7 +6,7 @@ resource "aws_appautoscaling_policy" "req_per_target" {
   service_namespace  = aws_appautoscaling_target.ecs.service_namespace
 
   target_tracking_scaling_policy_configuration {
-    target_value = 200.0
+    target_value = 50.0
 
     predefined_metric_specification {
       predefined_metric_type = "ALBRequestCountPerTarget"
