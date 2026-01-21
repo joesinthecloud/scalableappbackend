@@ -1,9 +1,10 @@
 data "aws_availability_zones" "available" {
   state = "available"
 
+  # Keep only standard regional AZs, exclude Local Zones and other zone types.
   filter {
-    name   = "opt-in-status"
-    values = ["opt-in-not-required"]
+    name   = "zone-type"
+    values = ["availability-zone"]
   }
 }
 
