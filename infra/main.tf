@@ -11,7 +11,6 @@ data "aws_availability_zones" "available" {
 locals {
   name = "${var.project}-${var.env}"
 
-  # Force standard AZs only
   azs = ["us-east-1a", "us-east-1b"]
 
   vpc_cidr = "10.0.0.0/16"
