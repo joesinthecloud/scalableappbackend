@@ -10,8 +10,12 @@ data "aws_availability_zones" "available" {
 
 locals {
   name = "${var.project}-${var.env}"
+<<<<<<< Updated upstream
 
   azs = ["us-east-1a", "us-east-1b"]
+=======
+  azs  = ["us-east-1a", "us-east-1b"]
+>>>>>>> Stashed changes
 
   vpc_cidr = "10.0.0.0/16"
 
