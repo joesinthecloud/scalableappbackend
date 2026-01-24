@@ -234,18 +234,18 @@ This ensures scaling is driven by actual per-task load, not averages.
 To validate scaling behavior, I executed load tests inside AWS, not locally.
 
 ### Test Configuration
-•	Locust deployed as a one-off ECS task
-•	50 concurrent users
-•	5 users per second ramp-up
-•	3-minute sustained load
-•	Endpoints tested: / and /health
+- Locust deployed as a one-off ECS task
+- 50 concurrent users
+- 5 users per second ramp-up
+- 3-minute sustained load
+- Endpoints tested: / and /health
 
 ### Observed Traffic
-•	~67,000 total requests
-•	~375 requests per second
-•	0% error rate
-•	Median latency: ~3–4 ms
-•	p99 latency: ~31 ms
+- ~67,000 total requests
+- ~375 requests per second
+- 0% error rate
+- Median latency: ~3–4 ms
+- p99 latency: ~31 ms
 
 ---
 
@@ -254,70 +254,70 @@ To validate scaling behavior, I executed load tests inside AWS, not locally.
 ### Automatic Scale-Out
 
 During sustained load:
-	•	ECS service scaled from 2 → 6 tasks
-	•	Triggered by ALB request-based CloudWatch alarms
-	•	All tasks registered as healthy in the target group
+	- ECS service scaled from 2 → 6 tasks
+	- Triggered by ALB request-based CloudWatch alarms
+	- All tasks registered as healthy in the target group
 
     Successfully set desired count to 6
     Triggered by ALB RequestCountPerTarget alarm
 
 ### Stability Under Load
-•	Zero failed requests
-•	No unhealthy targets
-•	Consistent latency across scaled tasks
+- Zero failed requests
+- No unhealthy targets
+- Consistent latency across scaled tasks
 
 ### Automatic Scale-In
 
 After traffic stopped:
-	•	Service scaled down from 6 → 5 → minimum
-	•	No manual intervention required
+	- Service scaled down from 6 → 5 → minimum
+	- No manual intervention required
 
 This confirms elastic growth and recovery, not just scale-out.
 
 ---
 
 ## 5. Business Impact
-•	Reliability
-  •	Automatically absorbs traffic spikes without downtime
-•	Cost Optimization
-  •	Scales down during idle periods, reducing unnecessary spend
-•	Operational Efficiency
-  •	Eliminates manual scaling decisions and on-call intervention
-•	Production Readiness
-  •	Health-aware scaling prevents cascading failures
-  •	Reproducible infrastructure supports faster iteration
+### Reliability
+  - Automatically absorbs traffic spikes without downtime
+### Cost Optimization
+  - Scales down during idle periods, reducing unnecessary spend
+### Operational Efficiency
+  - Eliminates manual scaling decisions and on-call intervention
+### Production Readiness
+  - Health-aware scaling prevents cascading failures
+  - Reproducible infrastructure supports faster iteration
 
 This architecture mirrors real-world backend patterns used in high-scale environments.
 
 ---
 
 ## 6. Evidence of Success
-•	CloudWatch scaling activities show successful scale-out events
-•	ECS service metrics confirm desired and running counts matched
-•	Target group health checks confirm all tasks remained healthy
-•	Load test logs confirm sustained throughput with zero errors
+- CloudWatch scaling activities show successful scale-out events
+- ECS service metrics confirm desired and running counts matched
+- Target group health checks confirm all tasks remained healthy
+- Load test logs confirm sustained throughput with zero errors
 
 ---
 
 ## 7. Future Improvements
 
 Planned enhancements include:
-•	Latency-based autoscaling using custom CloudWatch metrics
-•	Blue/green or canary deployments
-•	WAF integration for edge protection
-•	Distributed tracing for request-level observability
-•	Automated CI/CD pipeline with GitHub Actions
-•	Chaos testing (task and AZ failure simulation)
+- Latency-based autoscaling using custom CloudWatch metrics
+- Blue/green or canary deployments
+- WAF integration for edge protection
+- Distributed tracing for request-level observability
+- Automated CI/CD pipeline with GitHub Actions
+- Chaos testing (task and AZ failure simulation)
 
 ---
 
 ## Key Takeaway
 
 This project demonstrates:
-•	Production-grade autoscaling design
-•	Load-driven decision making
-•	Infrastructure as code discipline
-•	Measurable performance and reliability outcomes
+- Production-grade autoscaling design
+- Load-driven decision making
+- Infrastructure as code discipline
+- Measurable performance and reliability outcomes
 
 It reflects how scalable backend systems are designed, validated, and operated in real-world environments.
 
