@@ -9,137 +9,168 @@ AWS ECS (Fargate), Application Load Balancer, Terraform, CloudWatch, Docker, Loc
 
 ```mermaid
 flowchart TB
-%% =========================
-%% Internet + ALB
-%% =========================
-U[Users / Clients] -->|HTTP :80| ALB[Application Load Balancer\nscalableappbackend-dev-alb]
-ALB --> L80[Listener :80]
-L80 --> TG[Target Group\nscalableappbackend-dev-tg\nHealth check: /health\nTarget port: 80]
 
-%% =========================
-%% VPC + Networking
-%% =========================
-subgraph VPC[VPC 10.0.0.0/16\nscalableappbackend-dev]
-direction TB
+%% Internet entry
+CLIENT[Client Browser or API Client] -->|HTTP 80| ALB[ALB scalableappbackend-dev-alb]
+ALB --> LISTENER[Listener HTTP 80]
+LISTENER --> TG[Target Group scalableappbackend-dev-tg]
 
-IGW[Internet Gateway]
-
-subgraph Public[Public Subnets\nus-east-1a + us-east-1b]
-  direction TB
-  ALB
-  RTpub[Public Route Table\n0.0.0.0/0 -> IGW]
-end
-
-subgraph Private[Private Subnets\nus-east-1a + us-east-1b]
+%% VPC + networking
+subgraph VPC[VPC vpc-0cad1b88af10e050e 10.0.0.0/16]
   direction TB
 
-  subgraph ECSCluster[ECS Cluster\nscalableappbackend-dev-cluster]
-	direction TB
+  IGW[Internet Gateway igw-0fc1be43e2613d63d]
 
-	SVC[ECS Service\nscalableappbackend-dev-service\nDesiredCount: 2-6]
-	TASKS[App Tasks (Fargate)\nContainer Port: 80\nRoutes: / and /health]
-	LOCUST[Locust One-Off Task (Fargate)\n50 users, 3 min\nHits ALB DNS]
+  subgraph PUBLIC[Public Subnets]
+    direction TB
+    PUBA[Public Subnet us-east-1a subnet-0b554c82f62ad1086]
+    PUBB[Public Subnet us-east-1b subnet-09c57b50d8bbf03d8]
+    RTBPUB[Route Table Public rtb-02106d0d1616eb3be]
   end
 
-  RTpriv[Private Route Table\n(no IGW default route shown)]
+  subgraph PRIVATE[Private Subnets]
+    direction TB
+    PRIVA[Private Subnet us-east-1a subnet-087dd4ff6bb298fc6]
+    PRIVB[Private Subnet us-east-1b subnet-05f583dbb2354ee39]
+    RTBPRIV[Route Table Private rtb-02464598e4f32af18]
+  end
+
+  RTBPUB -->|0.0.0.0/0| IGW
 end
 
-%% Route associations
-Public --- RTpub
-Private --- RTpriv
-IGW --- RTpub
+%% ALB placement
+ALB --- PUBA
+ALB --- PUBB
+
+%% Security groups
+SGALB[Security Group ALB sg-0cfb4a2bd4a3e746e]
+SGECS[Security Group ECS Service sg-02bae9564348c2ee1]
+SGVPCE[Security Group VPC Endpoints sg-00c935f451d5bb354]
+SGLOCUST[Security Group Locust sg-01931dc0bb0ef9c29]
+
+CLIENT -->|Allowed inbound 80| SGALB
+SGALB --> ALB
+ALB -->|Forward to targets 80| SGECS
+
+%% ECS compute
+subgraph ECS[ECS]
+  direction TB
+  CLUSTER[ECS Cluster scalableappbackend-dev-cluster]
+  SERVICE[ECS Service scalableappbackend-dev-service]
+  TASKSET[Tasks on Fargate]
+  TASK1[App Task IP target 10.0.10.x port 80]
+  TASK2[App Task IP target 10.0.11.x port 80]
+  TASKN[App Task IP target N port 80]
 end
 
-%% ALB target routing into ECS tasks
-TG --> TASKS
+CLUSTER --> SERVICE
+SERVICE --> TASKSET
+TASKSET --> TASK1
+TASKSET --> TASK2
+TASKSET --> TASKN
 
-%% Locust traffic to ALB (internal test)
-LOCUST -->|HTTP traffic| ALB
+%% Target group registration
+TG -->|IP targets port 80| TASK1
+TG -->|IP targets port 80| TASK2
+TG -->|IP targets port 80| TASKN
 
-%% =========================
-%% Security Groups
-%% =========================
-SGALB[SG: ALB\nInbound: 80 from 0.0.0.0/0\nOutbound: 80 to ECS SG]
-SGECS[SG: ECS Service\nInbound: 80 from ALB SG\nOutbound: VPC endpoints]
-SGLOC[SG: Locust Task\nOutbound: 80 to ALB]
+%% Health checks
+ALB -->|Health checks /health| TG
 
-ALB --- SGALB
-TASKS --- SGECS
-LOCUST --- SGLOC
+%% Logging
+CWLOGS[CloudWatch Log Group /ecs/scalableappbackend-dev-app]
+TASK1 -->|App logs| CWLOGS
+TASK2 -->|App logs| CWLOGS
+TASKN -->|App logs| CWLOGS
 
-%% =========================
-%% Container Registry
-%% =========================
-subgraph ECR[ECR]
-direction TB
-ECRAPP[ECR Repo: scalableappbackend-dev-app\nTag: dev]
-ECRLOC[ECR Repo: scalableappbackend-dev-locust]
+%% Container registry
+ECRAPP[ECR Repo scalableappbackend-dev-app]
+ECRLOCUST[ECR Repo scalableappbackend-dev-locust]
+ECRAPP -->|Pull image| TASK1
+ECRAPP -->|Pull image| TASK2
+ECRAPP -->|Pull image| TASKN
+
+%% IAM roles for ECS tasks
+IAMEXEC[IAM Role ecs_task_execution]
+IAMTASK[IAM Role ecs_task]
+IAMEXEC --> TASK1
+IAMEXEC --> TASK2
+IAMEXEC --> TASKN
+IAMTASK --> TASK1
+IAMTASK --> TASK2
+IAMTASK --> TASKN
+
+%% VPC endpoints used by private tasks
+subgraph VPCE[VPC Endpoints for private subnet egress]
+  direction TB
+  VPCE_ECR_API[VPC Endpoint ECR API vpce-0a1114c94999ce3b9]
+  VPCE_ECR_DKR[VPC Endpoint ECR DKR vpce-0d6ed53762b3baa68]
+  VPCE_LOGS[VPC Endpoint CloudWatch Logs vpce-01f98134f94c56eca]
+  VPCE_S3[VPC Endpoint S3 vpce-00e3a74236af00830]
+  VPCE_DDB[VPC Endpoint DynamoDB vpce-0433429b6afecb41d]
 end
 
-ECRAPP -->|image pull| TASKS
-ECRLOC -->|image pull| LOCUST
+SGVPCE --- VPCE_ECR_API
+SGVPCE --- VPCE_ECR_DKR
+SGVPCE --- VPCE_LOGS
 
-%% =========================
-%% VPC Endpoints (Private Networking)
-%% =========================
-subgraph VPCE[VPC Endpoints (Interface/Gateway)]
-direction TB
-EP_ECR_API[Interface VPCE: ecr.api]
-EP_ECR_DKR[Interface VPCE: ecr.dkr]
-EP_LOGS[Interface VPCE: logs]
-EP_S3[Gateway VPCE: s3]
-EP_DDB[Gateway VPCE: dynamodb]
+TASK1 -->|ECR API calls| VPCE_ECR_API
+TASK2 -->|ECR API calls| VPCE_ECR_API
+TASKN -->|ECR API calls| VPCE_ECR_API
+
+TASK1 -->|ECR image pull| VPCE_ECR_DKR
+TASK2 -->|ECR image pull| VPCE_ECR_DKR
+TASKN -->|ECR image pull| VPCE_ECR_DKR
+
+TASK1 -->|Logs API| VPCE_LOGS
+TASK2 -->|Logs API| VPCE_LOGS
+TASKN -->|Logs API| VPCE_LOGS
+
+TASK1 -->|S3 gateway| VPCE_S3
+TASK2 -->|S3 gateway| VPCE_S3
+TASKN -->|S3 gateway| VPCE_S3
+
+TASK1 -->|DynamoDB gateway| VPCE_DDB
+TASK2 -->|DynamoDB gateway| VPCE_DDB
+TASKN -->|DynamoDB gateway| VPCE_DDB
+
+%% Autoscaling
+subgraph AAS[Application Auto Scaling for ECS DesiredCount]
+  direction TB
+  TARGET[Scalable Target min 2 max 6]
+  POLCPU[Target Tracking Policy CPU target 50]
+  POLRPT[Target Tracking Policy RequestCountPerTarget target 50]
+  ALARMCPUH[CW Alarm High CPU]
+  ALARMCPUL[CW Alarm Low CPU]
+  ALARMRPTH[CW Alarm High ReqPerTarget]
+  ALARMRPTL[CW Alarm Low ReqPerTarget]
 end
 
-TASKS --> EP_ECR_API
-TASKS --> EP_ECR_DKR
-TASKS --> EP_LOGS
-TASKS --> EP_S3
-TASKS --> EP_DDB
+SERVICE --> TARGET
+TARGET --> POLCPU
+TARGET --> POLRPT
+POLCPU --> ALARMCPUH
+POLCPU --> ALARMCPUL
+POLRPT --> ALARMRPTH
+POLRPT --> ALARMRPTL
 
-LOCUST --> EP_ECR_API
-LOCUST --> EP_ECR_DKR
-LOCUST --> EP_LOGS
+%% Metrics sources
+SERVICE -->|Publish CPU metrics| POLCPU
+ALB -->|Publish ALB metrics| POLRPT
+TG -->|Req per target metric| POLRPT
 
-%% =========================
-%% Observability + Autoscaling
-%% =========================
-subgraph CW[CloudWatch]
-direction TB
-LOGS[Log Group\n/ecs/scalableappbackend-dev-app]
-METRICS[Metrics\nALB RequestCountPerTarget\nECS CPUUtilization]
-ALARMS[TargetTracking Alarms\nHigh/Low]
+%% One-off load test task
+subgraph LOADTEST[Load Test]
+  direction TB
+  LOCUSTTASK[Locust One-off ECS Task]
 end
 
-TASKS --> LOGS
-LOCUST --> LOGS
-ALB --> METRICS
-TASKS --> METRICS
-METRICS --> ALARMS
-
-subgraph AAS[Application Auto Scaling]
-direction TB
-POL_REQ[Policy: ALBRequestCountPerTarget\nTargetValue: 50]
-POL_CPU[Policy: ECSServiceAverageCPUUtilization\nTargetValue: 50]
-end
-
-ALARMS --> AAS
-AAS -->|Adjust DesiredCount| SVC
-POL_REQ --- AAS
-POL_CPU --- AAS
-
-%% =========================
-%% IAM (Execution + Task Roles)
-%% =========================
-subgraph IAM[IAM]
-direction TB
-EXECROLE[ECS Task Execution Role\nPull from ECR\nWrite logs to CloudWatch]
-TASKROLE[ECS Task Role\n(app permissions if needed)]
-end
-
-EXECROLE --> TASKS
-EXECROLE --> LOCUST
-TASKROLE --> TASKS
+ECRLOCUST -->|Pull image| LOCUSTTASK
+LOCUSTTASK -->|HTTP 80 load| ALB
+LOCUSTTASK -->|Locust output logs| CWLOGS
+SGLOCUST --- LOCUSTTASK
+LOCUSTTASK --- PRIVA
+LOCUSTTASK --- PRIVB
 ```
 
 Autoscaling Signals:
