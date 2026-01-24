@@ -7,138 +7,140 @@ AWS ECS (Fargate), Application Load Balancer, Terraform, CloudWatch, Docker, Loc
 
 ## Architecture Overview
 
-	flowchart TB
-	  %% =========================
-	  %% Internet + ALB
-	  %% =========================
-	  U[Users / Clients] -->|HTTP :80| ALB[Application Load Balancer\nscalableappbackend-dev-alb]
-	  ALB --> L80[Listener :80]
-	  L80 --> TG[Target Group\nscalableappbackend-dev-tg\nHealth check: /health\nTarget port: 80]
-	
-	  %% =========================
-	  %% VPC + Networking
-	  %% =========================
-	  subgraph VPC[VPC 10.0.0.0/16\nscalableappbackend-dev]
-		direction TB
-	
-		IGW[Internet Gateway]
-	
-		subgraph Public[Public Subnets\nus-east-1a + us-east-1b]
-		  direction TB
-		  ALB
-		  RTpub[Public Route Table\n0.0.0.0/0 -> IGW]
-		end
-	
-		subgraph Private[Private Subnets\nus-east-1a + us-east-1b]
-		  direction TB
-	
-		  subgraph ECSCluster[ECS Cluster\nscalableappbackend-dev-cluster]
-			direction TB
-	
-			SVC[ECS Service\nscalableappbackend-dev-service\nDesiredCount: 2-6]
-			TASKS[App Tasks (Fargate)\nContainer Port: 80\nRoutes: / and /health]
-			LOCUST[Locust One-Off Task (Fargate)\n50 users, 3 min\nHits ALB DNS]
-		  end
-	
-		  RTpriv[Private Route Table\n(no IGW default route shown)]
-		end
-	
-		%% Route associations
-		Public --- RTpub
-		Private --- RTpriv
-		IGW --- RTpub
-	  end
-	
-	  %% ALB target routing into ECS tasks
-	  TG --> TASKS
-	
-	  %% Locust traffic to ALB (internal test)
-	  LOCUST -->|HTTP traffic| ALB
-	
-	  %% =========================
-	  %% Security Groups
-	  %% =========================
-	  SGALB[SG: ALB\nInbound: 80 from 0.0.0.0/0\nOutbound: 80 to ECS SG]
-	  SGECS[SG: ECS Service\nInbound: 80 from ALB SG\nOutbound: VPC endpoints]
-	  SGLOC[SG: Locust Task\nOutbound: 80 to ALB]
-	
-	  ALB --- SGALB
-	  TASKS --- SGECS
-	  LOCUST --- SGLOC
-	
-	  %% =========================
-	  %% Container Registry
-	  %% =========================
-	  subgraph ECR[ECR]
-		direction TB
-		ECRAPP[ECR Repo: scalableappbackend-dev-app\nTag: dev]
-		ECRLOC[ECR Repo: scalableappbackend-dev-locust]
-	  end
-	
-	  ECRAPP -->|image pull| TASKS
-	  ECRLOC -->|image pull| LOCUST
-	
-	  %% =========================
-	  %% VPC Endpoints (Private Networking)
-	  %% =========================
-	  subgraph VPCE[VPC Endpoints (Interface/Gateway)]
-		direction TB
-		EP_ECR_API[Interface VPCE: ecr.api]
-		EP_ECR_DKR[Interface VPCE: ecr.dkr]
-		EP_LOGS[Interface VPCE: logs]
-		EP_S3[Gateway VPCE: s3]
-		EP_DDB[Gateway VPCE: dynamodb]
-	  end
-	
-	  TASKS --> EP_ECR_API
-	  TASKS --> EP_ECR_DKR
-	  TASKS --> EP_LOGS
-	  TASKS --> EP_S3
-	  TASKS --> EP_DDB
-	
-	  LOCUST --> EP_ECR_API
-	  LOCUST --> EP_ECR_DKR
-	  LOCUST --> EP_LOGS
-	
-	  %% =========================
-	  %% Observability + Autoscaling
-	  %% =========================
-	  subgraph CW[CloudWatch]
-		direction TB
-		LOGS[Log Group\n/ecs/scalableappbackend-dev-app]
-		METRICS[Metrics\nALB RequestCountPerTarget\nECS CPUUtilization]
-		ALARMS[TargetTracking Alarms\nHigh/Low]
-	  end
-	
-	  TASKS --> LOGS
-	  LOCUST --> LOGS
-	  ALB --> METRICS
-	  TASKS --> METRICS
-	  METRICS --> ALARMS
-	
-	  subgraph AAS[Application Auto Scaling]
-		direction TB
-		POL_REQ[Policy: ALBRequestCountPerTarget\nTargetValue: 50]
-		POL_CPU[Policy: ECSServiceAverageCPUUtilization\nTargetValue: 50]
-	  end
-	
-	  ALARMS --> AAS
-	  AAS -->|Adjust DesiredCount| SVC
-	  POL_REQ --- AAS
-	  POL_CPU --- AAS
-	
-	  %% =========================
-	  %% IAM (Execution + Task Roles)
-	  %% =========================
-	  subgraph IAM[IAM]
-		direction TB
-		EXECROLE[ECS Task Execution Role\nPull from ECR\nWrite logs to CloudWatch]
-		TASKROLE[ECS Task Role\n(app permissions if needed)]
-	  end
-	
-	  EXECROLE --> TASKS
-	  EXECROLE --> LOCUST
-	  TASKROLE --> TASKS
+```mermaid
+flowchart TB
+%% =========================
+%% Internet + ALB
+%% =========================
+U[Users / Clients] -->|HTTP :80| ALB[Application Load Balancer\nscalableappbackend-dev-alb]
+ALB --> L80[Listener :80]
+L80 --> TG[Target Group\nscalableappbackend-dev-tg\nHealth check: /health\nTarget port: 80]
+
+%% =========================
+%% VPC + Networking
+%% =========================
+subgraph VPC[VPC 10.0.0.0/16\nscalableappbackend-dev]
+direction TB
+
+IGW[Internet Gateway]
+
+subgraph Public[Public Subnets\nus-east-1a + us-east-1b]
+  direction TB
+  ALB
+  RTpub[Public Route Table\n0.0.0.0/0 -> IGW]
+end
+
+subgraph Private[Private Subnets\nus-east-1a + us-east-1b]
+  direction TB
+
+  subgraph ECSCluster[ECS Cluster\nscalableappbackend-dev-cluster]
+	direction TB
+
+	SVC[ECS Service\nscalableappbackend-dev-service\nDesiredCount: 2-6]
+	TASKS[App Tasks (Fargate)\nContainer Port: 80\nRoutes: / and /health]
+	LOCUST[Locust One-Off Task (Fargate)\n50 users, 3 min\nHits ALB DNS]
+  end
+
+  RTpriv[Private Route Table\n(no IGW default route shown)]
+end
+
+%% Route associations
+Public --- RTpub
+Private --- RTpriv
+IGW --- RTpub
+end
+
+%% ALB target routing into ECS tasks
+TG --> TASKS
+
+%% Locust traffic to ALB (internal test)
+LOCUST -->|HTTP traffic| ALB
+
+%% =========================
+%% Security Groups
+%% =========================
+SGALB[SG: ALB\nInbound: 80 from 0.0.0.0/0\nOutbound: 80 to ECS SG]
+SGECS[SG: ECS Service\nInbound: 80 from ALB SG\nOutbound: VPC endpoints]
+SGLOC[SG: Locust Task\nOutbound: 80 to ALB]
+
+ALB --- SGALB
+TASKS --- SGECS
+LOCUST --- SGLOC
+
+%% =========================
+%% Container Registry
+%% =========================
+subgraph ECR[ECR]
+direction TB
+ECRAPP[ECR Repo: scalableappbackend-dev-app\nTag: dev]
+ECRLOC[ECR Repo: scalableappbackend-dev-locust]
+end
+
+ECRAPP -->|image pull| TASKS
+ECRLOC -->|image pull| LOCUST
+
+%% =========================
+%% VPC Endpoints (Private Networking)
+%% =========================
+subgraph VPCE[VPC Endpoints (Interface/Gateway)]
+direction TB
+EP_ECR_API[Interface VPCE: ecr.api]
+EP_ECR_DKR[Interface VPCE: ecr.dkr]
+EP_LOGS[Interface VPCE: logs]
+EP_S3[Gateway VPCE: s3]
+EP_DDB[Gateway VPCE: dynamodb]
+end
+
+TASKS --> EP_ECR_API
+TASKS --> EP_ECR_DKR
+TASKS --> EP_LOGS
+TASKS --> EP_S3
+TASKS --> EP_DDB
+
+LOCUST --> EP_ECR_API
+LOCUST --> EP_ECR_DKR
+LOCUST --> EP_LOGS
+
+%% =========================
+%% Observability + Autoscaling
+%% =========================
+subgraph CW[CloudWatch]
+direction TB
+LOGS[Log Group\n/ecs/scalableappbackend-dev-app]
+METRICS[Metrics\nALB RequestCountPerTarget\nECS CPUUtilization]
+ALARMS[TargetTracking Alarms\nHigh/Low]
+end
+
+TASKS --> LOGS
+LOCUST --> LOGS
+ALB --> METRICS
+TASKS --> METRICS
+METRICS --> ALARMS
+
+subgraph AAS[Application Auto Scaling]
+direction TB
+POL_REQ[Policy: ALBRequestCountPerTarget\nTargetValue: 50]
+POL_CPU[Policy: ECSServiceAverageCPUUtilization\nTargetValue: 50]
+end
+
+ALARMS --> AAS
+AAS -->|Adjust DesiredCount| SVC
+POL_REQ --- AAS
+POL_CPU --- AAS
+
+%% =========================
+%% IAM (Execution + Task Roles)
+%% =========================
+subgraph IAM[IAM]
+direction TB
+EXECROLE[ECS Task Execution Role\nPull from ECR\nWrite logs to CloudWatch]
+TASKROLE[ECS Task Role\n(app permissions if needed)]
+end
+
+EXECROLE --> TASKS
+EXECROLE --> LOCUST
+TASKROLE --> TASKS
+```
 
 Autoscaling Signals:
 • ALB RequestCountPerTarget
