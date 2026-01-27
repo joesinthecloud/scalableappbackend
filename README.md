@@ -184,7 +184,7 @@ Observability:
 
 ---
 
-## 1. Problem Statement (Situation)
+## 1. Problem Statement
 
 Modern customer-facing services experience **unpredictable traffic patterns**.  
 Teams often over-provision capacity to avoid outages, resulting in unnecessary cloud spend, or under-provision and suffer degraded performance during spikes.
@@ -197,7 +197,7 @@ The challenge was to design a backend that:
 
 ---
 
-## 2. Solution Design & Implementation (Task + Action)
+## 2. Solution Design & Implementation
 
 ### Infrastructure & Design Decisions
 - **Stateless ECS Fargate service** behind an Application Load Balancer
@@ -229,7 +229,7 @@ This ensures scaling is driven by actual per-task load, not averages.
 
 ---
 
-## 3. Validation via Load Testing (Action)
+## 3. Validation via Load Testing
 
 To validate scaling behavior, I executed load tests inside AWS, not locally.
 
@@ -249,7 +249,7 @@ To validate scaling behavior, I executed load tests inside AWS, not locally.
 
 ---
 
-## 4. Results & Measured Impact (Result)
+## 4. Results & Measured Impact
 
 ### Automatic Scale-Out
 
